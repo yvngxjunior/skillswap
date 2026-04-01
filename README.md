@@ -1,128 +1,139 @@
-# SkillSwap MVP
+# SkillSwap — Prototype MVP
 
-A mobile app that lets young users exchange skills peer-to-peer using a time-credit system.
+SkillSwap est une application mobile permettant à des utilisateurs jeunes d'échanger des compétences entre pairs selon un système de crédits-temps. Chaque échange est valorisé par une unité de crédit : l'enseignant en reçoit une, l'apprenant en cède une.
 
-## Stack
+## Architecture technique
 
-| Layer | Tech |
+| Couche | Technologie |
 |---|---|
-| Mobile | React Native + Expo (Sprint 1+) |
-| API | Node.js + Express |
-| Database | PostgreSQL 16 |
-| Real-time | Socket.io (JWT-authenticated) |
-| Auth | JWT (access + refresh rotation) |
+| Application mobile | React Native + Expo |
+| API REST | Node.js + Express |
+| Base de données | PostgreSQL 16 |
+| Temps réel | Socket.io (authentification JWT) |
+| Authentification | JWT avec rotation des jetons de rafraîchissement |
 
-## Quick start
+## Mise en route
 
 ```bash
 git clone https://github.com/ostrolawzyy-beep/skillswap.git
 cd skillswap
-cp backend/.env.example backend/.env   # set JWT_SECRET + DB_PASSWORD
+cp backend/.env.example backend/.env   # renseigner JWT_SECRET et DB_PASSWORD
 docker compose up -d
 docker compose exec backend npm run migrate
 docker compose exec backend npm run seed
 ```
 
-## Full API Reference
+## Référence de l'API
 
-### Auth
-| Method | Path | Description |
+### Authentification
+
+| Méthode | Chemin | Description |
 |---|---|---|
-| POST | /api/v1/auth/register | Register (age ≥15, CGU required) |
-| POST | /api/v1/auth/login | Login |
-| POST | /api/v1/auth/refresh | Rotate refresh token |
-| POST | /api/v1/auth/logout | Revoke refresh token |
+| POST | /api/v1/auth/register | Inscription (âge minimum 15 ans, acceptation des CGU requise) |
+| POST | /api/v1/auth/login | Connexion |
+| POST | /api/v1/auth/refresh | Rotation du jeton de rafraîchissement |
+| POST | /api/v1/auth/logout | Révocation du jeton de rafraîchissement |
 
-### Profile
-| Method | Path | Description |
+### Profil
+
+| Méthode | Chemin | Description |
 |---|---|---|
-| GET | /api/v1/profile/me | Own profile |
-| GET | /api/v1/profile/:userId | Public profile |
-| PUT | /api/v1/profile/me | Update profile + photo upload |
+| GET | /api/v1/profile/me | Consultation du profil personnel |
+| GET | /api/v1/profile/:userId | Consultation du profil public d'un utilisateur |
+| PUT | /api/v1/profile/me | Modification du profil et téléversement de la photo |
 
-### Skills
-| Method | Path | Description |
+### Compétences
+
+| Méthode | Chemin | Description |
 |---|---|---|
-| GET | /api/v1/skills | All skills (?q= ?category=) |
-| GET | /api/v1/skills/me | My skills |
-| POST | /api/v1/skills/me | Add / update a skill |
-| DELETE | /api/v1/skills/me/:id | Remove a skill |
-| GET | /api/v1/skills/user/:userId | Any user’s skills |
+| GET | /api/v1/skills | Liste des compétences référentielles (paramètres : q, category) |
+| GET | /api/v1/skills/me | Compétences de l'utilisateur connecté |
+| POST | /api/v1/skills/me | Ajout ou mise à jour d'une compétence |
+| DELETE | /api/v1/skills/me/:id | Suppression d'une compétence |
+| GET | /api/v1/skills/user/:userId | Compétences d'un utilisateur quelconque |
 
-### Availabilities
-| Method | Path | Description |
+### Disponibilités
+
+| Méthode | Chemin | Description |
 |---|---|---|
-| GET | /api/v1/availabilities/me | My time slots |
-| PUT | /api/v1/availabilities/me | Replace all slots |
-| GET | /api/v1/availabilities/:userId | Any user’s slots |
+| GET | /api/v1/availabilities/me | Créneaux de l'utilisateur connecté |
+| PUT | /api/v1/availabilities/me | Remplacement complet des créneaux |
+| GET | /api/v1/availabilities/:userId | Créneaux d'un utilisateur quelconque |
 
-### Search
-| Method | Path | Description |
+### Recherche
+
+| Méthode | Chemin | Description |
 |---|---|---|
-| GET | /api/v1/search/users | Find by skill + pagination |
+| GET | /api/v1/search/users | Recherche d'utilisateurs par compétence, avec pagination |
 
-### Exchanges
-| Method | Path | Description |
+### Échanges
+
+| Méthode | Chemin | Description |
 |---|---|---|
-| POST | /api/v1/exchanges | Create exchange request |
-| GET | /api/v1/exchanges | List my exchanges (?status= ?role=) |
-| GET | /api/v1/exchanges/:id | Get one exchange |
-| PATCH | /api/v1/exchanges/:id/respond | Accept or cancel (action: accept|cancel) |
-| PATCH | /api/v1/exchanges/:id/confirm | Confirm completion (both sides needed) |
+| POST | /api/v1/exchanges | Création d'une demande d'échange |
+| GET | /api/v1/exchanges | Liste des échanges (paramètres : status, role) |
+| GET | /api/v1/exchanges/:id | Consultation d'un échange |
+| PATCH | /api/v1/exchanges/:id/respond | Acceptation ou annulation (action : accept, cancel) |
+| PATCH | /api/v1/exchanges/:id/confirm | Confirmation de réalisation (les deux parties requises) |
 
-### Messages
-| Method | Path | Description |
+### Messagerie
+
+| Méthode | Chemin | Description |
 |---|---|---|
-| GET | /api/v1/exchanges/:id/messages | Get message history (cursor-based) |
-| POST | /api/v1/exchanges/:id/messages | Send message (REST fallback) |
+| GET | /api/v1/exchanges/:id/messages | Historique des messages (pagination par curseur) |
+| POST | /api/v1/exchanges/:id/messages | Envoi d'un message (point de repli REST) |
 
-### Reviews
-| Method | Path | Description |
+### Évaluations
+
+| Méthode | Chemin | Description |
 |---|---|---|
-| POST | /api/v1/exchanges/:id/reviews | Submit review (post-completion only) |
-| GET | /api/v1/users/:userId/reviews | Get all reviews for a user |
+| POST | /api/v1/exchanges/:id/reviews | Soumission d'une évaluation (uniquement après complétion) |
+| GET | /api/v1/users/:userId/reviews | Liste des évaluations reçues par un utilisateur |
 
-## Socket.io Events
+## Événements Socket.io
 
 ```
-Connect:  { auth: { token: "<JWT access token>" } }
+Connexion : { auth: { token: "<jeton d'accès JWT>" } }
 
-Client → Server:
-  join_exchange   { exchangeId }           — join a chat room
-  send_message    { exchangeId, content }  — send a message
-  typing          { exchangeId }           — broadcast typing indicator
+Client vers serveur :
+  join_exchange   { exchangeId }           — rejoindre la salle de discussion
+  send_message    { exchangeId, content }  — envoyer un message
+  typing          { exchangeId }           — diffuser un indicateur de saisie
 
-Server → Client:
+Serveur vers client :
   joined_exchange { exchangeId }
   new_message     { id, content, created_at, sender: { id, pseudo } }
   partner_typing  { userId, pseudo }
   error           { message }
 ```
 
-## Business Logic
+## Logique métier
 
-### Compatibility Score (0–100)
-| Dimension | Max pts | Rule |
+### Score de compatibilité (0 à 100)
+
+| Dimension | Points max | Règle de calcul |
 |---|---|---|
-| Skill level match | 40 | Exact=40, ±1 level=30, ±2=15, ±3+=5 |
-| Shared availability | 30 | 3 pts/shared day, capped at 10 days |
-| Partner rating | 20 | Normalised 1–5 → 0–20 |
-| Partner experience | 10 | 1 pt/exchange, capped at 10 |
+| Adéquation des niveaux | 40 | Identique = 40, écart de 1 = 30, écart de 2 = 15, écart de 3 ou plus = 5 |
+| Disponibilités communes | 30 | 3 points par jour commun, plafonné à 10 jours |
+| Note du partenaire | 20 | Normalisation de 1-5 vers 0-20 |
+| Expérience du partenaire | 10 | 1 point par échange réalisé, plafonné à 10 |
 
-### Credit System
-- Every user starts with **2 credits**
-- Requesting an exchange requires ≥1 credit
-- On completion: teacher **+1**, learner **-1** (floor at 0)
+### Système de crédits
 
-### Exchange Lifecycle
+- Chaque utilisateur dispose à l'inscription d'un solde initial de 2 crédits.
+- La création d'une demande d'échange requiert un solde d'au moins 1 crédit.
+- À la complétion d'un échange : l'enseignant reçoit 1 crédit, l'apprenant en cède 1 (plancher à 0).
+
+### Cycle de vie d'un échange
+
 ```
-pending → accepted → [both confirm] → completed
-       └→ cancelled (either side)
+en_attente → accepté → [confirmation des deux parties] → complété
+          └→ annulé (l'une ou l'autre partie)
 ```
 
-## Sprint Roadmap
+## Avancement par sprint
 
-- [x] Sprint 1 — Auth, Profile
-- [x] Sprint 2 — Skills, Availabilities, Search
-- [x] Sprint 3 — Exchanges, Matching score, Real-time chat
-- [x] Sprint 4 — Credit system, Reviews, History
+- [x] Sprint 1 — Authentification et profil
+- [x] Sprint 2 — Compétences, disponibilités et recherche
+- [x] Sprint 3 — Échanges, score de compatibilité et messagerie temps réel
+- [x] Sprint 4 — Crédits, évaluations et historique

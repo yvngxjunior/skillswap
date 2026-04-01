@@ -1,6 +1,6 @@
-# SkillSwap — Prototype MVP
+# SkillSwap — Prototype Projet Gestion de projets
 
-SkillSwap est une application mobile permettant à des utilisateurs jeunes d'échanger des compétences entre pairs selon un système de crédits-temps. Chaque échange est valorisé par une unité de crédit : l'enseignant en reçoit une, l'apprenant en cède une.
+SkillSwap est une application mobile permettant à des utilisateurs jeunes d'échanger des compétences entre pairs selon un système de crédits-temps. Chaque échange est valorisé par une unité de crédit : l'enseignant(e) en reçoit une, l'apprenant(e) en perd une.
 
 ## Architecture technique
 

@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "SkillSwap MVP API",
   "main": "src/server.js",
-  "type": "module",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
@@ -11,8 +10,9 @@
     "seed": "node src/database/seed.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "test": "jest --forceExit --detectOpenHandles",
-    "test:coverage": "jest --forceExit --detectOpenHandles --coverage"
+    "test": "jest --runInBand --forceExit",
+    "test:watch": "jest --watch --runInBand",
+    "test:coverage": "jest --runInBand --forceExit --coverage"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

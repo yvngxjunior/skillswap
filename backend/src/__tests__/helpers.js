@@ -7,11 +7,11 @@ const app = require('../app');
 async function createTestUser(overrides = {}) {
   const unique = Date.now() + Math.random().toString(36).slice(2, 7);
   const payload = {
-    pseudo: overrides.pseudo || `user_${unique}`,
+    pseudo: overrides.pseudo || `user${unique}`,
     email: overrides.email || `test_${unique}@example.com`,
     password: overrides.password || 'Password123!',
-    birthDate: overrides.birthDate || '2000-01-01',
-    acceptedCgu: overrides.acceptedCgu !== undefined ? overrides.acceptedCgu : true,
+    birth_date: overrides.birth_date || '2000-01-01',
+    cgu_accepted: overrides.cgu_accepted !== undefined ? overrides.cgu_accepted : true,
     ...overrides,
   };
 

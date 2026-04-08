@@ -1,0 +1,35 @@
+const request = require('supertest');
+const app = require('../app');
+
+/**
+ * Register + login a test user, return { user, accessToken, refreshToken }
+ */
+async function createTestUser(overrides = {}) {
+  const unique = Date.now() + Math.random().toString(36).slice(2, 7);
+  const payload = {
+    pseudo: overrides.pseudo || `user_${unique}`,
+    email: overrides.email || `test_${unique}@example.com`,
+    password: overrides.password || 'Password123!',
+    birthDate: overrides.birthDate || '2000-01-01',
+    acceptedCgu: overrides.acceptedCgu !== undefined ? overrides.acceptedCgu : true,
+    ...overrides,
+  };
+
+  const regRes = await request(app).post('/api/v1/auth/register').send(payload);
+  if (regRes.status !== 201) throw new Error(`createTestUser failed: ${JSON.stringify(regRes.body)}`);
+
+  return {
+    user: regRes.body.data.user,
+    accessToken: regRes.body.data.accessToken,
+    refreshToken: regRes.body.data.refreshToken,
+  };
+}
+
+/**
+ * Returns Authorization header object
+ */
+function authHeader(token) {
+  return { Authorization: `Bearer ${token}` };
+}
+
+module.exports = { createTestUser, authHeader };

@@ -2,7 +2,9 @@
 
 module.exports = {
   testEnvironment: 'node',
-  testMatch: ['**/tests/**/*.test.js'],
+  testMatch: ['**/__tests__/**/*.test.js'],
+  globalSetup: './src/__tests__/setup.js',
+  globalTeardown: './src/__tests__/teardown.js',
   forceExit: true,
   detectOpenHandles: true,
   coverageDirectory: 'coverage',
@@ -15,5 +17,6 @@ module.exports = {
   coverageThreshold: {
     global: { lines: 80, functions: 80, branches: 70, statements: 80 },
   },
-  testTimeout: 30000,
+  testTimeout: 15000,
+  verbose: true,
 };

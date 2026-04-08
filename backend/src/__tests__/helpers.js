@@ -3,15 +3,22 @@ const app = require('../app');
 
 /**
  * Register + login a test user, return { user, accessToken, refreshToken }
+ *
+ * The registration endpoint expects snake_case fields:
+ *   pseudo, email, password, birth_date, cgu_accepted
+ * and returns:
+ *   { user, access_token, refresh_token }
  */
 async function createTestUser(overrides = {}) {
   const unique = Date.now() + Math.random().toString(36).slice(2, 7);
   const payload = {
-    pseudo: overrides.pseudo || `user${unique}`,
-    email: overrides.email || `test_${unique}@example.com`,
+    pseudo: overrides.pseudo || `user${unique}`,          // alphanumeric only
+    email: overrides.email || `test${unique}@example.com`,
     password: overrides.password || 'Password123!',
-    birth_date: overrides.birth_date || '2000-01-01',
-    cgu_accepted: overrides.cgu_accepted !== undefined ? overrides.cgu_accepted : true,
+    birth_date: overrides.birth_date || '2000-01-01',     // snake_case — required by controller
+    cgu_accepted: overrides.cgu_accepted !== undefined
+      ? overrides.cgu_accepted
+      : true,                                             // snake_case — required by controller
     ...overrides,
   };
 
@@ -19,9 +26,9 @@ async function createTestUser(overrides = {}) {
   if (regRes.status !== 201) throw new Error(`createTestUser failed: ${JSON.stringify(regRes.body)}`);
 
   return {
-    user: regRes.body.data.user,
-    accessToken: regRes.body.data.accessToken,
-    refreshToken: regRes.body.data.refreshToken,
+    user: regRes.body.user,                  // controller returns { user, access_token, refresh_token }
+    accessToken: regRes.body.access_token,
+    refreshToken: regRes.body.refresh_token,
   };
 }
 

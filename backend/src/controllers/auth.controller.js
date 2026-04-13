@@ -21,12 +21,12 @@ async function register(req, res) {
 
   // Age check
   if (calcAge(birth_date) < MIN_AGE_YEARS) {
-    return res.status(422).json({ error: `You must be at least ${MIN_AGE_YEARS} years old to register.` });
+    return res.status(400).json({ error: `You must be at least ${MIN_AGE_YEARS} years old to register.` });
   }
 
   // CGU must be accepted
   if (!cgu_accepted) {
-    return res.status(422).json({ error: 'You must accept the terms and conditions.' });
+    return res.status(400).json({ error: 'You must accept the terms and conditions.' });
   }
 
   try {

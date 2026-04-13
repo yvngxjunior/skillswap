@@ -1,4 +1,5 @@
 const pool = require('../database/db');
+const { success } = require('../utils/response');
 const logger = require('../utils/logger');
 
 const PUBLIC_FIELDS = 'id, email, pseudo, bio, photo_url, credit_balance, exchange_count, average_rating, created_at';
@@ -14,7 +15,7 @@ async function getProfile(req, res) {
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
-    return res.json({ profile: result.rows[0] });
+    return success(res, result.rows[0]);
   } catch (err) {
     logger.error('Get profile error', { error: err.message });
     return res.status(500).json({ error: 'Internal server error.' });
@@ -56,7 +57,7 @@ async function updateProfile(req, res) {
       values
     );
 
-    return res.json({ profile: result.rows[0] });
+    return success(res, result.rows[0]);
   } catch (err) {
     logger.error('Update profile error', { error: err.message });
     return res.status(500).json({ error: 'Internal server error.' });

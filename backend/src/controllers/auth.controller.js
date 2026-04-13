@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const pool = require('../database/db');
 const { generateAccessToken, generateRefreshToken, hashToken } = require('../utils/jwt');
+const { success } = require('../utils/response');
 const logger = require('../utils/logger');
 
 const SALT_ROUNDS = 12;
@@ -20,12 +21,12 @@ async function register(req, res) {
 
   // Age check
   if (calcAge(birth_date) < MIN_AGE_YEARS) {
-    return res.status(400).json({ error: `You must be at least ${MIN_AGE_YEARS} years old to register.` });
+    return res.status(422).json({ error: `You must be at least ${MIN_AGE_YEARS} years old to register.` });
   }
 
   // CGU must be accepted
   if (!cgu_accepted) {
-    return res.status(400).json({ error: 'You must accept the terms and conditions.' });
+    return res.status(422).json({ error: 'You must accept the terms and conditions.' });
   }
 
   try {
@@ -60,11 +61,11 @@ async function register(req, res) {
 
     logger.info('New user registered', { userId: user.id });
 
-    return res.status(201).json({
+    return success(res, {
       user: { id: user.id, email: user.email, pseudo: user.pseudo, credit_balance: user.credit_balance },
       access_token: accessToken,
       refresh_token: refreshToken,
-    });
+    }, 201);
   } catch (err) {
     logger.error('Register error', { error: err.message });
     return res.status(500).json({ error: 'Internal server error.' });
@@ -101,7 +102,7 @@ async function login(req, res) {
 
     logger.info('User logged in', { userId: user.id });
 
-    return res.json({
+    return success(res, {
       user: { id: user.id, email: user.email, pseudo: user.pseudo, credit_balance: user.credit_balance },
       access_token: accessToken,
       refresh_token: refreshToken,
@@ -148,7 +149,7 @@ async function refreshToken(req, res) {
       [row.user_id, hashToken(newRefreshToken), expiresAt]
     );
 
-    return res.json({ access_token: newAccessToken, refresh_token: newRefreshToken });
+    return success(res, { access_token: newAccessToken, refresh_token: newRefreshToken });
   } catch (err) {
     logger.error('Refresh token error', { error: err.message });
     return res.status(500).json({ error: 'Internal server error.' });

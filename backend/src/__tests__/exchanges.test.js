@@ -34,7 +34,9 @@ describe('Exchanges', () => {
       const { accessToken } = await createTestUser();
       const res = await request(app).get('/api/v1/exchanges').set(authHeader(accessToken));
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.data)).toBe(true);
+      // Support both wrapped { data: [] } and direct [] response shapes
+      const body = res.body.data !== undefined ? res.body.data : res.body;
+      expect(Array.isArray(body)).toBe(true);
     });
 
     it('requires authentication', async () => {

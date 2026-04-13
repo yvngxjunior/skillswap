@@ -7,8 +7,8 @@ describe('Auth', () => {
     it('registers a valid user', async () => {
       const unique = Date.now();
       const res = await request(app).post('/api/v1/auth/register').send({
-        pseudo:       `newuser_${unique}`,
-        email:        `new_${unique}@example.com`,
+        pseudo:       `newuser${unique}`,
+        email:        `new${unique}@example.com`,
         password:     'Password123!',
         birth_date:   '2000-06-15',
         cgu_accepted: true,
@@ -21,8 +21,8 @@ describe('Auth', () => {
     it('rejects age < 15', async () => {
       const unique = Date.now();
       const res = await request(app).post('/api/v1/auth/register').send({
-        pseudo:       `young_${unique}`,
-        email:        `young_${unique}@example.com`,
+        pseudo:       `young${unique}`,
+        email:        `young${unique}@example.com`,
         password:     'Password123!',
         birth_date:   new Date(Date.now() - 14 * 365 * 24 * 3600 * 1000).toISOString().slice(0, 10),
         cgu_accepted: true,
@@ -33,8 +33,8 @@ describe('Auth', () => {
     it('rejects when CGU not accepted', async () => {
       const unique = Date.now();
       const res = await request(app).post('/api/v1/auth/register').send({
-        pseudo:       `nocgu_${unique}`,
-        email:        `nocgu_${unique}@example.com`,
+        pseudo:       `nocgu${unique}`,
+        email:        `nocgu${unique}@example.com`,
         password:     'Password123!',
         birth_date:   '2000-01-01',
         cgu_accepted: false,
@@ -45,7 +45,7 @@ describe('Auth', () => {
     it('rejects duplicate email', async () => {
       const { user } = await createTestUser();
       const res = await request(app).post('/api/v1/auth/register').send({
-        pseudo:       'another_pseudo',
+        pseudo:       'anotherpseudo',
         email:        user.email,
         password:     'Password123!',
         birth_date:   '2000-01-01',

@@ -42,11 +42,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run database migrations
-        env:
-          DATABASE_URL: postgres://skillswap:skillswap@localhost:5432/skillswap_test
-          TEST_DATABASE_URL: postgres://skillswap:skillswap@localhost:5432/skillswap_test
-        run: npm run migrate
+      # Schema is applied by Jest globalSetup (setup.js) — no separate migrate step needed
 
       - name: Run tests
         env:

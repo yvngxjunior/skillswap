@@ -11,11 +11,11 @@ describe('Exchanges', () => {
         .post('/api/v1/exchanges')
         .set(authHeader(accessToken))
         .send({
-          partnerId: partner.id,
-          skillId: null,
-          message: 'Hey, want to exchange skills?',
+          partner_id: partner.id,
+          skill_id:   null,
+          message:    'Hey, want to exchange skills?',
         });
-      // Accept 201 or 400 depending on whether skillId is required
+      // Accept 201 or 400 depending on whether skill_id is required
       expect([201, 400]).toContain(res.status);
     });
 
@@ -24,7 +24,7 @@ describe('Exchanges', () => {
       const res = await request(app)
         .post('/api/v1/exchanges')
         .set(authHeader(accessToken))
-        .send({ partnerId: user.id, message: 'Test' });
+        .send({ partner_id: user.id, message: 'Test' });
       expect(res.status).toBe(400);
     });
   });

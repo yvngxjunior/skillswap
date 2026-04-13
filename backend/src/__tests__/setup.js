@@ -1,12 +1,19 @@
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = async () => {
-  // Run migrations on test DB before all tests
-  const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL || process.env.DATABASE_URL });
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS test_meta (ran_at TIMESTAMPTZ DEFAULT NOW())
-  `);
+  const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
+  const pool = new Pool({ connectionString });
+
+  // Run the full schema so all tables exist before any test
+  const schema = fs.readFileSync(
+    path.resolve(__dirname, '../database/schema.sql'),
+    'utf8'
+  );
+  await pool.query(schema);
   await pool.end();
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
+
+  process.env.DATABASE_URL = connectionString;
   global.__TEST_SERVER_PORT__ = 4001;
 };

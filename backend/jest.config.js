@@ -3,8 +3,8 @@
 module.exports = {
   testEnvironment: 'node',
   testMatch: [
-    '**/__tests__/**/*.test.js',
-    '**/src/tests/**/*.test.js',
+    '<rootDir>/src/__tests__/**/*.test.js',
+    '<rootDir>/src/tests/**/*.test.js',
   ],
   globalSetup: './src/__tests__/setup.js',
   globalTeardown: './src/__tests__/teardown.js',

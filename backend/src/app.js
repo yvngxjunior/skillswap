@@ -22,10 +22,11 @@ const reviewsRoutes        = require('./routes/reviews.routes');
 const healthRoutes         = require('./routes/health.routes');
 const notificationsRoutes  = require('./routes/notifications.routes');
 const adminRoutes          = require('./routes/admin.routes');
+const reportsRoutes        = require('./routes/reports.routes');
 
 const app = express();
 
-// ─── Security ────────────────────────────────────────────────────────
+// ─── Security ────────────────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy:     true,
   crossOriginEmbedderPolicy: true,
@@ -35,21 +36,21 @@ app.use(helmet({
 }));
 app.use(cors(corsConfig));
 
-// ─── Observability ───────────────────────────────────────────────────
+// ─── Observability ──────────────────────────────────────────────────────────────
 app.use(requestId);
 app.use(httpLogger);
 
-// ─── Rate limiting ───────────────────────────────────────────────────
+// ─── Rate limiting ───────────────────────────────────────────────────────────────
 app.use(globalLimiter);
 
-// ─── Body parsers ────────────────────────────────────────────────────
+// ─── Body parsers ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Static files ────────────────────────────────────────────────────
+// ─── Static files ────────────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
-// ─── Routes ──────────────────────────────────────────────────────────
+// ─── Routes ───────────────────────────────────────────────────────────────────────
 app.use('/health',                     healthRoutes);
 app.use('/api/v1/auth',                authLimiter, authRoutes);
 app.use('/api/v1/profile',             profileRoutes);
@@ -59,9 +60,10 @@ app.use('/api/v1/search',              searchRoutes);
 app.use('/api/v1/exchanges',           exchangesRoutes);
 app.use('/api/v1/users',               reviewsRoutes);
 app.use('/api/v1/notifications',       notificationsRoutes);
+app.use('/api/v1/reports',             reportsRoutes);
 app.use('/api/v1/admin',               adminRoutes);
 
-// ─── Fallthrough & error handlers ────────────────────────────────────
+// ─── Fallthrough & error handlers ──────────────────────────────────────────────────────
 app.use((_req, res) => error(res, 404, 'NOT_FOUND', 'Route not found.'));
 app.use(errorHandler);
 

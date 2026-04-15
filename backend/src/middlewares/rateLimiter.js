@@ -18,4 +18,13 @@ const globalLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later.' },
 });
 
-module.exports = { authLimiter, globalLimiter };
+// Report limiter: max 5 reports per user per day
+const reportLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Report limit reached. You can submit at most 5 reports per day.' },
+});
+
+module.exports = { authLimiter, globalLimiter, reportLimiter };

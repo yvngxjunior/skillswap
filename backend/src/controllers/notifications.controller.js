@@ -7,20 +7,16 @@ const { z }  = require('zod');
 
 // ── Zod schemas ────────────────────────────────────────────────────────
 
+// Accept both 'token' (test / mobile client) and 'expo_push_token' (legacy)
 const registerTokenSchema = z.object({
-  expo_push_token: z.string().min(1).max(200),
+  token:           z.string().min(1).max(200).optional(),
+  expo_push_token: z.string().min(1).max(200).optional(),
+}).refine(d => d.token || d.expo_push_token, {
+  message: 'token is required',
 });
 
 // ── Controllers ────────────────────────────────────────────────────────
 
-/**
- * GET /api/v1/notifications
- * Returns paginated notifications for the authenticated user,
- * ordered newest-first, with unread count in meta.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- */
 async function listNotifications(req, res) {
   const userId = req.user.id;
   const limit  = Math.min(parseInt(req.query.limit,  10) || 20, 100);
@@ -54,28 +50,33 @@ async function listNotifications(req, res) {
   }
 }
 
-/**
- * PATCH /api/v1/notifications/:notificationId/read
- * Marks a single notification as read (idempotent if already read → 404).
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- */
 async function markRead(req, res) {
   const userId             = req.user.id;
   const { notificationId } = req.params;
 
   try {
-    const result = await pool.query(
-      `UPDATE notifications
-       SET read_at = NOW()
-       WHERE id = $1 AND user_id = $2 AND read_at IS NULL
-       RETURNING *`,
-      [notificationId, userId]
+    // Fetch first so we can distinguish 404 (doesn't exist) from 403 (wrong owner)
+    const { rows } = await pool.query(
+      'SELECT id, user_id, read_at FROM notifications WHERE id = $1',
+      [notificationId]
     );
-    if (result.rowCount === 0) {
-      return error(res, 404, 'NOT_FOUND', 'Notification not found or already read.');
+
+    if (rows.length === 0) {
+      return error(res, 404, 'NOT_FOUND', 'Notification not found.');
     }
+
+    if (rows[0].user_id !== userId) {
+      return error(res, 403, 'FORBIDDEN', 'You do not have access to this notification.');
+    }
+
+    if (rows[0].read_at !== null) {
+      return error(res, 404, 'NOT_FOUND', 'Notification already read.');
+    }
+
+    const result = await pool.query(
+      `UPDATE notifications SET read_at = NOW() WHERE id = $1 RETURNING *`,
+      [notificationId]
+    );
     return success(res, result.rows[0]);
   } catch (err) {
     logger.error('markRead error', { error: err.message });
@@ -83,21 +84,11 @@ async function markRead(req, res) {
   }
 }
 
-/**
- * PATCH /api/v1/notifications/read-all
- * Marks every unread notification for the current user as read.
- * Returns { updated: <count> }.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- */
 async function markAllRead(req, res) {
   const userId = req.user.id;
   try {
     const result = await pool.query(
-      `UPDATE notifications
-       SET read_at = NOW()
-       WHERE user_id = $1 AND read_at IS NULL`,
+      `UPDATE notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`,
       [userId]
     );
     return success(res, { updated: result.rowCount });
@@ -107,25 +98,20 @@ async function markAllRead(req, res) {
   }
 }
 
-/**
- * POST /api/v1/notifications/push-token
- * Register or update an Expo push token for the authenticated user.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- */
 async function registerPushToken(req, res) {
   const userId = req.user.id;
   const parsed = registerTokenSchema.safeParse(req.body);
   if (!parsed.success) {
-    return error(res, 400, 'VALIDATION_ERROR', 'Invalid input.', parsed.error.errors);
+    return error(res, 400, 'VALIDATION_ERROR', parsed.error.errors[0].message);
   }
-  const { expo_push_token } = parsed.data;
+
+  // Prefer 'token' (current client field), fall back to legacy 'expo_push_token'
+  const pushToken = parsed.data.token || parsed.data.expo_push_token;
 
   try {
     await pool.query(
-      'UPDATE users SET expo_push_token = $1 WHERE id = $2',
-      [expo_push_token, userId]
+      'UPDATE users SET push_token = $1 WHERE id = $2',
+      [pushToken, userId]
     );
     return success(res, { registered: true });
   } catch (err) {

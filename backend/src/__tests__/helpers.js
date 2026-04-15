@@ -1,24 +1,59 @@
+'use strict';
+
 const request = require('supertest');
 const { Pool } = require('pg');
 const fs   = require('fs');
 const path = require('path');
 const app  = require('../app');
 
+/** Run schema.sql + all migrations against the test DB. Idempotent. */
+async function applyMigrations() {
+  const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
+  if (!connectionString) return;
+
+  const pool = new Pool({ connectionString });
+
+  const schemaPath = path.resolve(__dirname, '../database/schema.sql');
+  if (fs.existsSync(schemaPath)) {
+    await pool.query(fs.readFileSync(schemaPath, 'utf8'));
+  }
+
+  const migrationsDir = path.resolve(__dirname, '../database/migrations');
+  if (fs.existsSync(migrationsDir)) {
+    const files = fs.readdirSync(migrationsDir)
+      .filter(f => f.endsWith('.sql'))
+      .sort();
+    for (const file of files) {
+      await pool.query(fs.readFileSync(path.join(migrationsDir, file), 'utf8'));
+    }
+  }
+
+  await pool.end();
+}
+
 /**
- * Run the schema migration once before each __tests__ suite.
- * The globalSetup already does this, but it runs in a separate worker context.
- * This ensures the tables exist in the DB connection used by the test worker.
+ * Run schema + migrations once per test-worker process before any suite.
+ * Ensures migration-added columns (e.g. `role`) exist in this worker's
+ * DB connection — globalSetup runs in a different Node context.
  */
 beforeAll(async () => {
-  const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
-  if (!connectionString) return; // let the test fail with a clear DB error
-  const schemaPath = path.resolve(__dirname, '../database/schema.sql');
-  if (!fs.existsSync(schemaPath)) return;
-  const pool = new Pool({ connectionString });
-  const schema = fs.readFileSync(schemaPath, 'utf8');
-  await pool.query(schema);
-  await pool.end();
+  await applyMigrations();
 });
+
+/**
+ * Promote a user to admin role directly in the DB.
+ * Runs migrations first so the `role` column is guaranteed to exist,
+ * regardless of the order in which beforeAll hooks are called.
+ *
+ * @param {string} userId — UUID of the user to promote
+ */
+async function promoteToAdmin(userId) {
+  await applyMigrations(); // idempotent — safe to call multiple times
+  const connectionString = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
+  const pool = new Pool({ connectionString });
+  await pool.query('UPDATE users SET role = $1 WHERE id = $2', ['admin', userId]);
+  await pool.end();
+}
 
 /**
  * Register a fresh user and return tokens + user object.
@@ -56,4 +91,4 @@ function authHeader(token) {
   return { Authorization: `Bearer ${token}` };
 }
 
-module.exports = { createTestUser, authHeader };
+module.exports = { createTestUser, authHeader, promoteToAdmin };

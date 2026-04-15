@@ -1,5 +1,5 @@
 const { Pool } = require('pg');
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 
 module.exports = async () => {
@@ -20,9 +20,22 @@ module.exports = async () => {
 
   const pool = new Pool({ connectionString });
 
-  // Run the full schema so all tables exist before any test
+  // 1. Base schema (tables, types, triggers)
   const schema = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(schema);
+
+  // 2. All incremental migrations in order
+  const migrationsDir = path.resolve(__dirname, '../database/migrations');
+  if (fs.existsSync(migrationsDir)) {
+    const files = fs.readdirSync(migrationsDir)
+      .filter(f => f.endsWith('.sql'))
+      .sort(); // lexicographic order == numeric order (001_, 002_, …)
+    for (const file of files) {
+      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+      await pool.query(sql);
+    }
+  }
+
   await pool.end();
 
   process.env.DATABASE_URL = connectionString;

@@ -18,7 +18,6 @@ async function checkAndAwardBadges(userId) {
       `SELECT COUNT(*) AS total
        FROM exchanges
        WHERE status = 'completed'
-         AND deleted_at IS NULL
          AND (requester_id = $1 OR partner_id = $1)`,
       [userId]
     );

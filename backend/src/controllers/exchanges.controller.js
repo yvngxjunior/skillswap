@@ -1,28 +1,32 @@
-const pool = require('../database/db');
+'use strict';
+
+const pool   = require('../database/db');
 const { success, error } = require('../utils/response');
 const { computeCompatibilityScore } = require('../services/matching.service');
 const { applyExchangeCredits, hasEnoughCredits } = require('../services/credits.service');
+const { createNotification } = require('../services/notification.service');
 const logger = require('../utils/logger');
 
 // ─── CREATE ───────────────────────────────────────────────────────────
 
+/**
+ * POST /api/v1/exchanges
+ * Create a new exchange request. Emits `exchange_request` notification to partner.
+ */
 async function createExchange(req, res) {
   const requesterId = req.user.id;
   const { partner_id, skill_id, duration_minutes, desired_date, message } = req.body;
 
-  // Prevent self-exchange
   if (requesterId === partner_id) {
     return error(res, 400, 'INVALID_REQUEST', 'You cannot request an exchange with yourself.');
   }
 
-  // Credit check
   const enough = await hasEnoughCredits(requesterId).catch(() => false);
   if (!enough) {
     return error(res, 400, 'INSUFFICIENT_CREDITS', 'You need at least 1 credit to request an exchange.');
   }
 
   try {
-    // Compute compatibility score
     const [requesterSlots, partnerSlots, requesterWanted, partnerOffered] = await Promise.all([
       pool.query('SELECT day_of_week FROM availabilities WHERE user_id = $1', [requesterId]),
       pool.query('SELECT day_of_week FROM availabilities WHERE user_id = $1', [partner_id]),
@@ -32,15 +36,15 @@ async function createExchange(req, res) {
                   WHERE us.user_id = $1 AND us.skill_id = $2 AND us.type = 'offered'`, [partner_id, skill_id]),
     ]);
 
-    const wantedLevel  = requesterWanted.rows[0]?.level  || 'beginner';
-    const offeredData  = partnerOffered.rows[0] || {};
+    const wantedLevel = requesterWanted.rows[0]?.level || 'beginner';
+    const offeredData = partnerOffered.rows[0] || {};
     const score = computeCompatibilityScore({
       wantedLevel,
-      offeredLevel:     offeredData.level          || 'beginner',
+      offeredLevel:     offeredData.level         || 'beginner',
       requesterSlots:   requesterSlots.rows,
       partnerSlots:     partnerSlots.rows,
-      partnerRating:    offeredData.average_rating  || null,
-      partnerExchanges: offeredData.exchange_count  || 0,
+      partnerRating:    offeredData.average_rating || null,
+      partnerExchanges: offeredData.exchange_count || 0,
     });
 
     const result = await pool.query(
@@ -50,8 +54,20 @@ async function createExchange(req, res) {
        RETURNING *`,
       [requesterId, partner_id, skill_id, duration_minutes || 60, desired_date || null, message || '', score]
     );
+    const exchange = result.rows[0];
 
-    return success(res, result.rows[0], 201);
+    // Notify partner of incoming request
+    createNotification({
+      userId:  partner_id,
+      type:    'exchange_request',
+      payload: {
+        exchangeId:      exchange.id,
+        requesterPseudo: req.user.pseudo,
+        skillId:         skill_id,
+      },
+    }).catch(err => logger.warn('notification failed', { error: err.message }));
+
+    return success(res, exchange, 201);
   } catch (err) {
     logger.error('createExchange error', { error: err.message });
     return error(res, 500, 'INTERNAL_ERROR', 'Internal server error.');
@@ -60,9 +76,13 @@ async function createExchange(req, res) {
 
 // ─── LIST ─────────────────────────────────────────────────────────────
 
+/**
+ * GET /api/v1/exchanges
+ * List exchanges for the authenticated user. Supports ?status and ?role filters.
+ */
 async function listExchanges(req, res) {
   const userId = req.user.id;
-  const { status, role } = req.query; // role: sent | received | all
+  const { status, role } = req.query;
 
   let condition = '(e.requester_id = $1 OR e.partner_id = $1)';
   if (role === 'sent')     condition = 'e.requester_id = $1';
@@ -79,13 +99,13 @@ async function listExchanges(req, res) {
     const result = await pool.query(
       `SELECT
          e.*,
-         s.name  AS skill_name,
+         s.name AS skill_name,
          json_build_object('id', r.id, 'pseudo', r.pseudo, 'photo_url', r.photo_url, 'average_rating', r.average_rating) AS requester,
          json_build_object('id', p.id, 'pseudo', p.pseudo, 'photo_url', p.photo_url, 'average_rating', p.average_rating) AS partner
        FROM exchanges e
-       JOIN skills s  ON s.id  = e.skill_id
-       JOIN users  r  ON r.id  = e.requester_id
-       JOIN users  p  ON p.id  = e.partner_id
+       JOIN skills s ON s.id = e.skill_id
+       JOIN users  r ON r.id = e.requester_id
+       JOIN users  p ON p.id = e.partner_id
        WHERE ${condition} ${statusClause}
        ORDER BY e.created_at DESC`,
       params
@@ -99,6 +119,10 @@ async function listExchanges(req, res) {
 
 // ─── GET ONE ──────────────────────────────────────────────────────────
 
+/**
+ * GET /api/v1/exchanges/:exchangeId
+ * Fetch a single exchange the authenticated user participates in.
+ */
 async function getExchange(req, res) {
   const userId = req.user.id;
   const { exchangeId } = req.params;
@@ -122,12 +146,16 @@ async function getExchange(req, res) {
   }
 }
 
-// ─── RESPOND (accept / cancel) ───────────────────────────────────────────
+// ─── RESPOND (accept / cancel) ────────────────────────────────────────
 
+/**
+ * PATCH /api/v1/exchanges/:exchangeId/respond
+ * Accept or cancel an exchange. Emits exchange_accepted / exchange_cancelled notification.
+ */
 async function respondExchange(req, res) {
   const userId = req.user.id;
   const { exchangeId } = req.params;
-  const { action } = req.body; // 'accept' | 'cancel'
+  const { action } = req.body;
 
   if (!['accept', 'cancel'].includes(action)) {
     return error(res, 400, 'VALIDATION_ERROR', 'action must be accept or cancel.');
@@ -137,9 +165,9 @@ async function respondExchange(req, res) {
     const exch = await pool.query('SELECT * FROM exchanges WHERE id = $1', [exchangeId]);
     if (exch.rowCount === 0) return error(res, 404, 'NOT_FOUND', 'Exchange not found.');
 
-    const ex = exch.rows[0];
-    const isPartner    = ex.partner_id    === userId;
-    const isRequester  = ex.requester_id  === userId;
+    const ex         = exch.rows[0];
+    const isPartner   = ex.partner_id   === userId;
+    const isRequester = ex.requester_id === userId;
 
     if (!isPartner && !isRequester) {
       return error(res, 403, 'FORBIDDEN', 'Not your exchange.');
@@ -147,7 +175,6 @@ async function respondExchange(req, res) {
     if (ex.status !== 'pending') {
       return error(res, 400, 'INVALID_STATE', `Exchange is already ${ex.status}.`);
     }
-    // Only the partner can accept; both can cancel
     if (action === 'accept' && !isPartner) {
       return error(res, 403, 'FORBIDDEN', 'Only the partner can accept.');
     }
@@ -157,15 +184,31 @@ async function respondExchange(req, res) {
       'UPDATE exchanges SET status = $1 WHERE id = $2 RETURNING *',
       [newStatus, exchangeId]
     );
-    return success(res, result.rows[0]);
+    const updated = result.rows[0];
+
+    // Notify the other participant
+    const notifyUserId = isPartner ? ex.requester_id : ex.partner_id;
+    const notifType    = action === 'accept' ? 'exchange_accepted' : 'exchange_cancelled';
+    createNotification({
+      userId:  notifyUserId,
+      type:    notifType,
+      payload: { exchangeId, actorPseudo: req.user.pseudo },
+    }).catch(err => logger.warn('notification failed', { error: err.message }));
+
+    return success(res, updated);
   } catch (err) {
     logger.error('respondExchange error', { error: err.message });
     return error(res, 500, 'INTERNAL_ERROR', 'Internal server error.');
   }
 }
 
-// ─── CONFIRM COMPLETION (Sprint 4) ──────────────────────────────────────
+// ─── CONFIRM COMPLETION ──────────────────────────────────────────────
 
+/**
+ * PATCH /api/v1/exchanges/:exchangeId/confirm
+ * Both participants must confirm to mark exchange as completed.
+ * Emits exchange_completed notification when both sides confirm.
+ */
 async function confirmExchange(req, res) {
   const userId = req.user.id;
   const { exchangeId } = req.params;
@@ -183,7 +226,7 @@ async function confirmExchange(req, res) {
       return error(res, 404, 'NOT_FOUND', 'Exchange not found.');
     }
 
-    const ex = exch.rows[0];
+    const ex          = exch.rows[0];
     const isRequester = ex.requester_id === userId;
     const isPartner   = ex.partner_id   === userId;
 
@@ -196,7 +239,6 @@ async function confirmExchange(req, res) {
       return error(res, 400, 'INVALID_STATE', 'Exchange must be accepted before confirming.');
     }
 
-    // Set the correct confirmation flag
     const updateField = isRequester ? 'confirmed_by_requester' : 'confirmed_by_partner';
     const updated = await client.query(
       `UPDATE exchanges SET ${updateField} = TRUE WHERE id = $1 RETURNING *`,
@@ -204,20 +246,24 @@ async function confirmExchange(req, res) {
     );
     const updatedEx = updated.rows[0];
 
-    // If both have confirmed → complete the exchange + apply credits
     if (updatedEx.confirmed_by_requester && updatedEx.confirmed_by_partner) {
       await client.query(
         "UPDATE exchanges SET status = 'completed' WHERE id = $1",
         [exchangeId]
       );
       updatedEx.status = 'completed';
-
-      // Skill teacher = partner (they offered), learner = requester
       await applyExchangeCredits(client, ex.partner_id, ex.requester_id);
+
+      // Notify both participants that exchange is completed
+      const notifPayload = { exchangeId };
+      createNotification({ userId: ex.requester_id, type: 'exchange_completed', payload: notifPayload })
+        .catch(err => logger.warn('notification failed', { error: err.message }));
+      createNotification({ userId: ex.partner_id,   type: 'exchange_completed', payload: notifPayload })
+        .catch(err => logger.warn('notification failed', { error: err.message }));
     }
 
     await client.query('COMMIT');
-    return success(res, { ...updatedEx });
+    return success(res, updatedEx);
   } catch (err) {
     await client.query('ROLLBACK');
     logger.error('confirmExchange error', { error: err.message });

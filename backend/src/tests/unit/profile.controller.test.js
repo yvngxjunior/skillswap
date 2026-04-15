@@ -19,16 +19,23 @@ beforeEach(() => jest.clearAllMocks());
 describe('getProfile', () => {
   it('returns profile for req.params.userId', async () => {
     const row = { id: 'u1', pseudo: 'alice' };
-    pool.query.mockResolvedValueOnce({ rowCount: 1, rows: [row] });
+    // First call: user query; second call: _fetchBadges
+    pool.query
+      .mockResolvedValueOnce({ rowCount: 1, rows: [row] })
+      .mockResolvedValueOnce({ rows: [] });          // badges
     const req = { params: { userId: 'u1' }, user: { id: 'me' } };
     const res = makeRes();
     await getProfile(req, res);
     expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: row }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ id: 'u1', pseudo: 'alice' }) })
+    );
   });
 
   it('falls back to req.user.id when params.userId is absent', async () => {
-    pool.query.mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'me' }] });
+    pool.query
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'me' }] })
+      .mockResolvedValueOnce({ rows: [] });
     const req = { params: {}, user: { id: 'me' } };
     const res = makeRes();
     await getProfile(req, res);
@@ -36,7 +43,9 @@ describe('getProfile', () => {
   });
 
   it('returns 404 when user not found', async () => {
-    pool.query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+    pool.query
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
     const req = { params: { userId: 'ghost' }, user: { id: 'me' } };
     const res = makeRes();
     await getProfile(req, res);
@@ -98,7 +107,6 @@ describe('updateProfile', () => {
     const res = makeRes();
     await updateProfile(req, res);
     expect(res.status).toHaveBeenCalledWith(200);
-    // No pseudo uniqueness check should have been made
     expect(pool.query).toHaveBeenCalledTimes(1);
   });
 

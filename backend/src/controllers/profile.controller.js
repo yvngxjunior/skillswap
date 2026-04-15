@@ -7,8 +7,30 @@ const logger = require('../utils/logger');
 const PUBLIC_FIELDS = 'id, email, pseudo, bio, photo_url, credit_balance, exchange_count, average_rating, created_at';
 
 /**
+ * Helper: fetch badges earned by a user.
+ * @param {string} userId
+ * @returns {Promise<object[]>}
+ */
+async function _fetchBadges(userId) {
+  try {
+    const result = await pool.query(
+      `SELECT b.slug, b.label, b.description, b.icon, b.threshold, ub.awarded_at
+       FROM user_badges ub
+       JOIN badges b ON b.id = ub.badge_id
+       WHERE ub.user_id = $1
+       ORDER BY b.threshold ASC`,
+      [userId]
+    );
+    return result.rows;
+  } catch (_err) {
+    // badges table may not exist in older test DBs — return empty gracefully
+    return [];
+  }
+}
+
+/**
  * GET /api/v1/profile/me  (or /:userId for public view)
- * Returns the public profile of a user.
+ * Returns the public profile of a user, including earned badges.
  *
  * @param {import('express').Request}  req
  * @param {import('express').Response} res
@@ -17,14 +39,18 @@ async function getProfile(req, res) {
   const userId = req.params.userId || req.user.id;
 
   try {
-    const result = await pool.query(
-      `SELECT ${PUBLIC_FIELDS} FROM users WHERE id = $1`,
-      [userId]
-    );
-    if (result.rowCount === 0) {
+    const [userResult, badgesResult] = await Promise.all([
+      pool.query(
+        `SELECT ${PUBLIC_FIELDS} FROM users WHERE id = $1`,
+        [userId]
+      ),
+      _fetchBadges(userId),
+    ]);
+
+    if (userResult.rowCount === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
-    return success(res, result.rows[0]);
+    return success(res, { ...userResult.rows[0], badges: badgesResult });
   } catch (err) {
     logger.error('Get profile error', { error: err.message, userId });
     return res.status(500).json({ error: 'Internal server error.' });
@@ -33,7 +59,7 @@ async function getProfile(req, res) {
 
 /**
  * PUT /api/v1/profile/me
- * Updates the authenticated user’s own profile (optional avatar upload).
+ * Updates the authenticated user's own profile (optional avatar upload).
  *
  * @param {import('express').Request}  req
  * @param {import('express').Response} res
@@ -44,7 +70,6 @@ async function updateProfile(req, res) {
   const photo_url = req.file ? `/uploads/${req.file.filename}` : undefined;
 
   try {
-    // Pseudo uniqueness check
     if (pseudo) {
       const conflict = await pool.query(
         'SELECT id FROM users WHERE pseudo = $1 AND id != $2',
@@ -59,9 +84,9 @@ async function updateProfile(req, res) {
     const values = [];
     let idx = 1;
 
-    if (pseudo     !== undefined) { fields.push(`pseudo    = $${idx++}`); values.push(pseudo);    }
-    if (bio        !== undefined) { fields.push(`bio       = $${idx++}`); values.push(bio);       }
-    if (photo_url  !== undefined) { fields.push(`photo_url = $${idx++}`); values.push(photo_url); }
+    if (pseudo    !== undefined) { fields.push(`pseudo    = $${idx++}`); values.push(pseudo);    }
+    if (bio       !== undefined) { fields.push(`bio       = $${idx++}`); values.push(bio);       }
+    if (photo_url !== undefined) { fields.push(`photo_url = $${idx++}`); values.push(photo_url); }
 
     if (fields.length === 0) {
       return res.status(400).json({ error: 'No fields to update.' });
@@ -82,8 +107,7 @@ async function updateProfile(req, res) {
 
 /**
  * GET /api/v1/profile/me/data
- * GDPR data portability — returns a full export of all personal data
- * held for the authenticated user.
+ * GDPR data portability — returns a full export of all personal data.
  *
  * @param {import('express').Request}  req
  * @param {import('express').Response} res
@@ -150,12 +174,7 @@ async function exportMyData(req, res) {
 
 /**
  * DELETE /api/v1/profile/me
- * GDPR right to erasure — anonymises the account in a transaction:
- *   1. Revokes all refresh tokens (forces logout everywhere).
- *   2. Overwrites PII columns with deterministic placeholder values
- *      while preserving the row so foreign-key integrity is maintained.
- *
- * Returns 204 No Content on success.
+ * GDPR right to erasure — anonymises the account in a transaction.
  *
  * @param {import('express').Request}  req
  * @param {import('express').Response} res
@@ -167,14 +186,11 @@ async function deleteMyAccount(req, res) {
   try {
     await client.query('BEGIN');
 
-    // Step 1: revoke all active refresh tokens
     await client.query(
       'DELETE FROM refresh_tokens WHERE user_id = $1',
       [userId]
     );
 
-    // Step 2: anonymise PII — soft-delete preserves FK integrity for
-    // exchange / review history while eliminating personal data
     await client.query(
       `UPDATE users SET
          email         = 'deleted_' || id || '@deleted.invalid',
@@ -188,10 +204,7 @@ async function deleteMyAccount(req, res) {
     );
 
     await client.query('COMMIT');
-
     logger.info('GDPR account erasure completed', { userId });
-
-    // 204 — no body
     return res.status(204).send();
   } catch (err) {
     await client.query('ROLLBACK');

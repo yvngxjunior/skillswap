@@ -23,6 +23,7 @@ const healthRoutes         = require('./routes/health.routes');
 const notificationsRoutes  = require('./routes/notifications.routes');
 const adminRoutes          = require('./routes/admin.routes');
 const reportsRoutes        = require('./routes/reports.routes');
+const badgesRoutes         = require('./routes/badges.routes');
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use('/api/v1/users',               reviewsRoutes);
 app.use('/api/v1/notifications',       notificationsRoutes);
 app.use('/api/v1/reports',             reportsRoutes);
 app.use('/api/v1/admin',               adminRoutes);
+app.use('/api/v1/badges',              badgesRoutes);
 
 // ─── Fallthrough & error handlers ──────────────────────────────────────────────────────
 app.use((_req, res) => error(res, 404, 'NOT_FOUND', 'Route not found.'));

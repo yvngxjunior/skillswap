@@ -39,7 +39,7 @@ describe('Auth', () => {
         birth_date:   '2000-01-01',
         cgu_accepted: false,
       });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
     });
 
     it('rejects duplicate email', async () => {
@@ -56,7 +56,7 @@ describe('Auth', () => {
 
     it('rejects missing required fields', async () => {
       const res = await request(app).post('/api/v1/auth/register').send({ email: 'incomplete@example.com' });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
     });
   });
 

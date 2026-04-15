@@ -15,8 +15,8 @@ describe('Exchanges', () => {
           skill_id:   null,
           message:    'Hey, want to exchange skills?',
         });
-      // Accept 201 or 400 depending on whether skill_id is required
-      expect([201, 400]).toContain(res.status);
+      // Accept 201 or 422 depending on whether skill_id is required by the Joi schema
+      expect([201, 422]).toContain(res.status);
     });
 
     it('rejects a self-exchange request', async () => {
@@ -25,7 +25,7 @@ describe('Exchanges', () => {
         .post('/api/v1/exchanges')
         .set(authHeader(accessToken))
         .send({ partner_id: user.id, message: 'Test' });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(422);
     });
   });
 

@@ -6,10 +6,10 @@ process.env.NODE_ENV    = 'test';
 
 const request = require('supertest');
 const app     = require('../../app');
-const { setupDatabase, teardownDatabase, clearTables } = require('../helpers/db');
+const { pool, setupDatabase, clearTables } = require('../helpers/db');
 
 beforeAll(() => setupDatabase());
-afterAll(()  => teardownDatabase());
+afterAll(()  => pool.end());
 beforeEach(() => clearTables());
 
 const VALID_USER = {

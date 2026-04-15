@@ -30,27 +30,14 @@ async function setupDatabase() {
   await pool.query(schema);
 }
 
-async function teardownDatabase() {
-  await pool.query(`
-    DROP TABLE IF EXISTS reviews         CASCADE;
-    DROP TABLE IF EXISTS messages        CASCADE;
-    DROP TABLE IF EXISTS exchanges       CASCADE;
-    DROP TABLE IF EXISTS availabilities  CASCADE;
-    DROP TABLE IF EXISTS user_skills     CASCADE;
-    DROP TABLE IF EXISTS skills          CASCADE;
-    DROP TABLE IF EXISTS refresh_tokens  CASCADE;
-    DROP TABLE IF EXISTS users           CASCADE;
-    DROP TYPE  IF EXISTS exchange_status CASCADE;
-    DROP TYPE  IF EXISTS skill_level     CASCADE;
-    DROP TYPE  IF EXISTS skill_type      CASCADE;
-  `);
-  await pool.end();
-}
-
+/**
+ * Wipe all rows between tests without touching the schema.
+ * Schema lifecycle (CREATE / DROP) is owned by globalSetup / globalTeardown.
+ */
 async function clearTables() {
   await pool.query(
     'TRUNCATE reviews, messages, exchanges, availabilities, user_skills, skills, refresh_tokens, users RESTART IDENTITY CASCADE'
   );
 }
 
-module.exports = { pool, setupDatabase, teardownDatabase, clearTables };
+module.exports = { pool, setupDatabase, clearTables };

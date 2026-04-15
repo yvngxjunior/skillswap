@@ -215,6 +215,11 @@ async function confirmExchange(req, res) {
   const { exchangeId } = req.params;
 
   const client = await pool.connect();
+  // Track whether we reached the completed state so we can award badges
+  // after COMMIT (badge.service uses the global pool which cannot see
+  // uncommitted writes made on `client`).
+  let completedParticipants = null;
+
   try {
     await client.query('BEGIN');
 
@@ -255,22 +260,28 @@ async function confirmExchange(req, res) {
       updatedEx.status = 'completed';
       await applyExchangeCredits(client, ex.partner_id, ex.requester_id);
 
-      // Notify both participants that exchange is completed (fire-and-forget is fine here)
+      // Notify both participants that exchange is completed (fire-and-forget)
       const notifPayload = { exchangeId };
       createNotification({ userId: ex.requester_id, type: 'exchange_completed', payload: notifPayload })
         .catch(err => logger.warn('notification failed', { error: err.message }));
       createNotification({ userId: ex.partner_id, type: 'exchange_completed', payload: notifPayload })
         .catch(err => logger.warn('notification failed', { error: err.message }));
 
-      // Await badge check so user_badges rows are persisted before the response
-      // is returned. badge.service.js swallows its own errors, so this is safe.
-      await Promise.all([
-        checkAndAwardBadges(ex.requester_id),
-        checkAndAwardBadges(ex.partner_id),
-      ]);
+      // Remember participants so we can check badges after COMMIT.
+      // We MUST NOT call checkAndAwardBadges here — it uses the global pool
+      // (a different connection) which cannot read the uncommitted status update.
+      completedParticipants = [ex.requester_id, ex.partner_id];
     }
 
     await client.query('COMMIT');
+
+    // Now that COMMIT is done the completed status is visible to all connections.
+    // Award badges synchronously so the HTTP response is only returned after
+    // user_badges rows exist (tests read the profile immediately after this call).
+    if (completedParticipants) {
+      await Promise.all(completedParticipants.map(id => checkAndAwardBadges(id)));
+    }
+
     return success(res, updatedEx);
   } catch (err) {
     await client.query('ROLLBACK');

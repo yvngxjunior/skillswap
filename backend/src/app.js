@@ -21,6 +21,7 @@ const exchangesRoutes      = require('./routes/exchanges.routes');
 const reviewsRoutes        = require('./routes/reviews.routes');
 const healthRoutes         = require('./routes/health.routes');
 const notificationsRoutes  = require('./routes/notifications.routes');
+const adminRoutes          = require('./routes/admin.routes');
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use('/api/v1/search',              searchRoutes);
 app.use('/api/v1/exchanges',           exchangesRoutes);
 app.use('/api/v1/users',               reviewsRoutes);
 app.use('/api/v1/notifications',       notificationsRoutes);
+app.use('/api/v1/admin',               adminRoutes);
 
 // ─── Fallthrough & error handlers ────────────────────────────────────
 app.use((_req, res) => error(res, 404, 'NOT_FOUND', 'Route not found.'));

@@ -1,52 +1,72 @@
 'use strict';
 
-const express     = require('express');
-const cors        = require('cors');
-const helmet      = require('helmet');
-const morgan      = require('morgan');
-const rateLimit   = require('express-rate-limit');
+const express = require('express');
+const cors    = require('cors');
+const helmet  = require('helmet');
+const path    = require('path');
 
-const authRoutes          = require('./routes/auth.routes');
-const profileRoutes       = require('./routes/profile.routes');
-const skillsRoutes        = require('./routes/skills.routes');
-const availabilityRoutes  = require('./routes/availability.routes');
-const searchRoutes        = require('./routes/search.routes');
-const exchangeRoutes      = require('./routes/exchange.routes');
-const reviewRoutes        = require('./routes/review.routes');
-const notificationsRoutes = require('./routes/notifications.routes');
-const reportsRoutes       = require('./routes/reports.routes');
-const adminRoutes         = require('./routes/admin.routes');
-const badgesRoutes        = require('./routes/badges.routes');
+const corsConfig   = require('./config/cors');
+const requestId    = require('./middlewares/requestId');
+const httpLogger   = require('./middlewares/httpLogger');
+const errorHandler = require('./middlewares/errorHandler');
+const { authLimiter, globalLimiter } = require('./middlewares/rateLimiter');
+const { error }    = require('./utils/response');
+
+const authRoutes           = require('./routes/auth.routes');
+const profileRoutes        = require('./routes/profile.routes');
+const skillsRoutes         = require('./routes/skills.routes');
+const availabilitiesRoutes = require('./routes/availabilities.routes');
+const searchRoutes         = require('./routes/search.routes');
+const exchangesRoutes      = require('./routes/exchanges.routes');
+const reviewsRoutes        = require('./routes/reviews.routes');
+const healthRoutes         = require('./routes/health.routes');
+const notificationsRoutes  = require('./routes/notifications.routes');
+const adminRoutes          = require('./routes/admin.routes');
+const reportsRoutes        = require('./routes/reports.routes');
+const badgesRoutes         = require('./routes/badges.routes');
 
 const app = express();
 
-// ── Security & parsing ────────────────────────────────────────────────
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(morgan('dev'));
+// ─── Security ────────────────────────────────────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy:     true,
+  crossOriginEmbedderPolicy: true,
+  crossOriginOpenerPolicy:   true,
+  crossOriginResourcePolicy: true,
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+}));
+app.use(cors(corsConfig));
 
-// ── Global rate limit ─────────────────────────────────────────────────
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 300 }));
+// ─── Observability ──────────────────────────────────────────────────────────────
+app.use(requestId);
+app.use(httpLogger);
 
-// ── Routes ────────────────────────────────────────────────────────────
-app.use('/api/v1/auth',           authRoutes);
-app.use('/api/v1/profile',        profileRoutes);
-app.use('/api/v1/skills',         skillsRoutes);
-app.use('/api/v1/availabilities', availabilityRoutes);
-app.use('/api/v1/search',         searchRoutes);
-app.use('/api/v1/exchanges',      exchangeRoutes);
-app.use('/api/v1/reviews',        reviewRoutes);
-app.use('/api/v1/notifications',  notificationsRoutes);
-app.use('/api/v1/reports',        reportsRoutes);
-app.use('/api/v1/admin',          adminRoutes);
-app.use('/api/v1/badges',         badgesRoutes);
+// ─── Rate limiting ───────────────────────────────────────────────────────────────
+app.use(globalLimiter);
 
-// ── Health check ──────────────────────────────────────────────────────
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+// ─── Body parsers ────────────────────────────────────────────────────────────────
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
 
-// ── 404 handler ───────────────────────────────────────────────────────
-app.use((_req, res) => res.status(404).json({ error: 'NOT_FOUND', message: 'Route not found.' }));
+// ─── Static files ────────────────────────────────────────────────────────────────
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+
+// ─── Routes ───────────────────────────────────────────────────────────────────────
+app.use('/health',                     healthRoutes);
+app.use('/api/v1/auth',                authLimiter, authRoutes);
+app.use('/api/v1/profile',             profileRoutes);
+app.use('/api/v1/skills',              skillsRoutes);
+app.use('/api/v1/availabilities',      availabilitiesRoutes);
+app.use('/api/v1/search',              searchRoutes);
+app.use('/api/v1/exchanges',           exchangesRoutes);
+app.use('/api/v1/users',               reviewsRoutes);
+app.use('/api/v1/notifications',       notificationsRoutes);
+app.use('/api/v1/reports',             reportsRoutes);
+app.use('/api/v1/admin',               adminRoutes);
+app.use('/api/v1/badges',              badgesRoutes);
+
+// ─── Fallthrough & error handlers ──────────────────────────────────────────────────────
+app.use((_req, res) => error(res, 404, 'NOT_FOUND', 'Route not found.'));
+app.use(errorHandler);
 
 module.exports = app;

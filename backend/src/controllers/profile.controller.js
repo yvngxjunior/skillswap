@@ -41,7 +41,7 @@ async function getProfile(req, res) {
   try {
     const [userResult, badgesResult] = await Promise.all([
       pool.query(
-        `SELECT ${PUBLIC_FIELDS} FROM users WHERE id = $1 AND deleted_at IS NULL`,
+        `SELECT ${PUBLIC_FIELDS} FROM users WHERE id = $1`,
         [userId]
       ),
       _fetchBadges(userId),

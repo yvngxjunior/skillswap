@@ -255,18 +255,19 @@ async function confirmExchange(req, res) {
       updatedEx.status = 'completed';
       await applyExchangeCredits(client, ex.partner_id, ex.requester_id);
 
-      // Notify both participants that exchange is completed
+      // Notify both participants that exchange is completed (fire-and-forget is fine here)
       const notifPayload = { exchangeId };
       createNotification({ userId: ex.requester_id, type: 'exchange_completed', payload: notifPayload })
         .catch(err => logger.warn('notification failed', { error: err.message }));
       createNotification({ userId: ex.partner_id, type: 'exchange_completed', payload: notifPayload })
         .catch(err => logger.warn('notification failed', { error: err.message }));
 
-      // Check and award badges for both participants (non-blocking)
-      Promise.all([
+      // Await badge check so user_badges rows are persisted before the response
+      // is returned. badge.service.js swallows its own errors, so this is safe.
+      await Promise.all([
         checkAndAwardBadges(ex.requester_id),
         checkAndAwardBadges(ex.partner_id),
-      ]).catch(err => logger.warn('badge check failed', { error: err.message }));
+      ]);
     }
 
     await client.query('COMMIT');

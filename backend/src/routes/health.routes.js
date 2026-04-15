@@ -1,10 +1,12 @@
+'use strict';
+
 const { Router } = require('express');
-const { pool } = require('../database/pool');
+const pool = require('../database/db');
 const router = Router();
 
 /**
  * GET /health
- * Basic liveness probe — always returns 200 if the process is alive.
+ * Liveness probe — always 200 if the process is alive.
  */
 router.get('/', (_req, res) => {
   res.json({
@@ -30,6 +32,31 @@ router.get('/ready', async (req, res) => {
       meta: { requestId: req.id, timestamp: new Date().toISOString() },
     });
   }
+});
+
+/**
+ * GET /health/metrics
+ * Process metrics — exposes uptime, memory usage, and runtime info.
+ * Should be protected behind internal network / admin auth in production.
+ */
+router.get('/metrics', (req, res) => {
+  const mem = process.memoryUsage();
+  const toMb = (bytes) => (bytes / 1024 / 1024).toFixed(2);
+
+  res.json({
+    data: {
+      uptime_seconds: Math.floor(process.uptime()),
+      memory: {
+        rss_mb:        toMb(mem.rss),
+        heap_used_mb:  toMb(mem.heapUsed),
+        heap_total_mb: toMb(mem.heapTotal),
+        external_mb:   toMb(mem.external),
+      },
+      node_version: process.version,
+      env:          process.env.NODE_ENV || 'development',
+    },
+    meta: { requestId: req.id, timestamp: new Date().toISOString() },
+  });
 });
 
 module.exports = router;

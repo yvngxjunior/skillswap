@@ -1,6 +1,10 @@
+// Validate environment variables at startup — exits with code 1 if invalid.
+// Must be the very first require so all subsequent modules see validated env.
+require('./config/env');
 require('dotenv').config();
+
 const http = require('http');
-const app = require('./app');
+const app  = require('./app');
 const { initSocket } = require('./socket');
 const logger = require('./utils/logger');
 

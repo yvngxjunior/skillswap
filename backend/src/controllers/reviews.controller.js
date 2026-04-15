@@ -1,14 +1,18 @@
-const pool = require('../database/db');
+'use strict';
+
+const pool   = require('../database/db');
 const { success, error } = require('../utils/response');
 const { recalculateAverageRating } = require('../services/reviews.service');
+const { createNotification } = require('../services/notification.service');
 const logger = require('../utils/logger');
 
 /**
  * POST /api/v1/exchanges/:exchangeId/reviews
  * Submit a review after a completed exchange.
+ * Emits a `new_review` notification to the reviewee.
  */
 async function createReview(req, res) {
-  const reviewerId = req.user.id;
+  const reviewerId  = req.user.id;
   const { exchangeId } = req.params;
   const { punctuality, pedagogy, respect, overall, comment } = req.body;
 
@@ -16,7 +20,6 @@ async function createReview(req, res) {
   try {
     await client.query('BEGIN');
 
-    // Verify exchange is completed and requester is a participant
     const exch = await client.query(
       `SELECT requester_id, partner_id, status FROM exchanges WHERE id = $1`,
       [exchangeId]
@@ -36,7 +39,6 @@ async function createReview(req, res) {
       return error(res, 400, 'INVALID_STATE', 'Can only review completed exchanges.');
     }
 
-    // Reviewee is the other participant
     const revieweeId = ex.requester_id === reviewerId ? ex.partner_id : ex.requester_id;
 
     const result = await client.query(
@@ -46,14 +48,25 @@ async function createReview(req, res) {
       [exchangeId, reviewerId, revieweeId, punctuality, pedagogy, respect, overall, comment || '']
     );
 
-    // Recalculate reviewee's average rating
     const newAvg = await recalculateAverageRating(client, revieweeId);
 
     await client.query('COMMIT');
+
+    // Notify the reviewee (after commit — fire-and-forget)
+    createNotification({
+      userId:  revieweeId,
+      type:    'new_review',
+      payload: {
+        exchangeId,
+        reviewerPseudo: req.user.pseudo,
+        overall,
+      },
+    }).catch(err => logger.warn('notification failed', { error: err.message }));
+
     return success(res, { review: result.rows[0], reviewee_new_average: newAvg }, 201);
   } catch (err) {
     await client.query('ROLLBACK');
-    if (err.code === '23505') { // unique violation
+    if (err.code === '23505') {
       return error(res, 409, 'DUPLICATE', 'You already reviewed this exchange.');
     }
     logger.error('createReview error', { error: err.message });
@@ -65,7 +78,7 @@ async function createReview(req, res) {
 
 /**
  * GET /api/v1/users/:userId/reviews
- * Get all reviews left for a user.
+ * Get all reviews left for a specific user.
  */
 async function getUserReviews(req, res) {
   const { userId } = req.params;

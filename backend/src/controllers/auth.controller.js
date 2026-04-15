@@ -19,18 +19,15 @@ function calcAge(birthDate) {
 async function register(req, res) {
   const { email, password, pseudo, birth_date, cgu_accepted } = req.body;
 
-  // Age check — controller-level business rule guard (400, not 422)
   if (calcAge(birth_date) < MIN_AGE_YEARS) {
     return res.status(400).json({ error: `You must be at least ${MIN_AGE_YEARS} years old to register.` });
   }
 
-  // CGU must be accepted — controller-level business rule guard (400, not 422)
   if (!cgu_accepted) {
     return res.status(400).json({ error: 'You must accept the terms and conditions.' });
   }
 
   try {
-    // Check uniqueness
     const existing = await pool.query(
       'SELECT id FROM users WHERE email = $1 OR pseudo = $2',
       [email.toLowerCase(), pseudo]
@@ -52,7 +49,6 @@ async function register(req, res) {
     const accessToken = generateAccessToken({ id: user.id, pseudo: user.pseudo });
     const refreshToken = generateRefreshToken();
 
-    // Store hashed refresh token
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await pool.query(
       'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
@@ -77,7 +73,8 @@ async function login(req, res) {
 
   try {
     const result = await pool.query(
-      'SELECT id, email, pseudo, password_hash, credit_balance FROM users WHERE email = $1',
+      // deleted_at IS NULL: soft-deleted users must not be able to log in
+      'SELECT id, email, pseudo, password_hash, credit_balance FROM users WHERE email = $1 AND deleted_at IS NULL',
       [email.toLowerCase()]
     );
 
@@ -125,7 +122,7 @@ async function refreshToken(req, res) {
       `SELECT rt.id, rt.user_id, rt.expires_at, u.pseudo
        FROM refresh_tokens rt
        JOIN users u ON u.id = rt.user_id
-       WHERE rt.token_hash = $1`,
+       WHERE rt.token_hash = $1 AND u.deleted_at IS NULL`,
       [hashed]
     );
 
@@ -139,7 +136,6 @@ async function refreshToken(req, res) {
       return res.status(401).json({ error: 'Refresh token expired.' });
     }
 
-    // Rotate: delete old, issue new
     await pool.query('DELETE FROM refresh_tokens WHERE id = $1', [row.id]);
     const newAccessToken = generateAccessToken({ id: row.user_id, pseudo: row.pseudo });
     const newRefreshToken = generateRefreshToken();

@@ -1,15 +1,8 @@
 'use strict';
 
 const request = require('supertest');
-const { Pool } = require('pg');
 const app = require('../app');
-const { createTestUser, authHeader } = require('./helpers');
-
-async function promoteToAdmin(userId) {
-  const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL || process.env.DATABASE_URL });
-  await pool.query('UPDATE users SET role = $1 WHERE id = $2', ['admin', userId]);
-  await pool.end();
-}
+const { createTestUser, authHeader, promoteToAdmin } = require('./helpers');
 
 describe('Admin Moderation', () => {
   let adminToken;
@@ -37,7 +30,7 @@ describe('Admin Moderation', () => {
     if (reportRes.status === 201) createdReportId = reportRes.body.data.id;
   });
 
-  // ── GET /admin/reports ─────────────────────────────────────────────────
+  // ── GET /admin/reports ──────────────────────────────────────────────
 
   it('rejects non-admin (403)', async () => {
     const res = await request(app)
@@ -79,14 +72,14 @@ describe('Admin Moderation', () => {
     expect(res.body.meta.page).toBe(1);
   });
 
-  // ── PATCH /admin/reports/:id ─────────────────────────────────────────────
+  // ── PATCH /admin/reports/:id ────────────────────────────────────────
 
   it('rejects invalid status value (400)', async () => {
     if (!createdReportId) return;
     const res = await request(app)
       .patch(`/api/v1/admin/reports/${createdReportId}`)
       .set(authHeader(adminToken))
-      .send({ status: 'pending' }); // 'pending' is not a valid update value
+      .send({ status: 'pending' });
     expect(res.status).toBe(400);
   });
 
@@ -109,7 +102,6 @@ describe('Admin Moderation', () => {
   });
 
   it('marks report as dismissed', async () => {
-    // Create a fresh report to dismiss
     const reporter = await createTestUser();
     const anotherTarget = await createTestUser();
     const rr = await request(app)
@@ -125,7 +117,7 @@ describe('Admin Moderation', () => {
     expect(res.body.data.status).toBe('dismissed');
   });
 
-  // ── DELETE /admin/users/:id ─────────────────────────────────────────────
+  // ── DELETE /admin/users/:id ─────────────────────────────────────────
 
   it('returns 404 for unknown user id', async () => {
     const res = await request(app)
@@ -165,7 +157,7 @@ describe('Admin Moderation', () => {
     expect(loginRes.status).toBe(401);
   });
 
-  // ── DELETE /admin/exchanges/:id ──────────────────────────────────────────
+  // ── DELETE /admin/exchanges/:id ─────────────────────────────────────
 
   it('returns 404 for unknown exchange id', async () => {
     const res = await request(app)

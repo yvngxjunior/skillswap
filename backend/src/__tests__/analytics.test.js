@@ -1,16 +1,8 @@
 'use strict';
 
 const request = require('supertest');
-const { Pool } = require('pg');
 const app = require('../app');
-const { createTestUser, authHeader } = require('./helpers');
-
-// Helper: promote a user to admin directly in the DB
-async function promoteToAdmin(userId) {
-  const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL || process.env.DATABASE_URL });
-  await pool.query('UPDATE users SET role = $1 WHERE id = $2', ['admin', userId]);
-  await pool.end();
-}
+const { createTestUser, authHeader, promoteToAdmin } = require('./helpers');
 
 describe('Admin Analytics', () => {
   let adminToken;
@@ -39,7 +31,7 @@ describe('Admin Analytics', () => {
     expect(res.status).toBe(403);
   });
 
-  // ── GET /admin/analytics/overview ───────────────────────────────────────
+  // ── GET /admin/analytics/overview ───────────────────────────────────
 
   it('returns overview stats for admin', async () => {
     const res = await request(app)
@@ -52,7 +44,7 @@ describe('Admin Analytics', () => {
     expect(res.body.data).toHaveProperty('activeUsers7d');
   });
 
-  // ── GET /admin/analytics/exchange-volume ────────────────────────────────
+  // ── GET /admin/analytics/exchange-volume ────────────────────────────
 
   it('returns exchange volume without date filters', async () => {
     const res = await request(app)
@@ -70,7 +62,7 @@ describe('Admin Analytics', () => {
     expect(Array.isArray(res.body.data)).toBe(true);
   });
 
-  // ── GET /admin/analytics/popular-skills ────────────────────────────────
+  // ── GET /admin/analytics/popular-skills ────────────────────────────
 
   it('returns popular skills list', async () => {
     const res = await request(app)
@@ -88,7 +80,7 @@ describe('Admin Analytics', () => {
     expect(Array.isArray(res.body.data)).toBe(true);
   });
 
-  // ── GET /admin/analytics/user-retention ────────────────────────────────
+  // ── GET /admin/analytics/user-retention ────────────────────────────
 
   it('returns user retention cohorts', async () => {
     const res = await request(app)

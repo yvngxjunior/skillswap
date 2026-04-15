@@ -40,11 +40,12 @@ describe('POST /api/v1/auth/register', () => {
     expect(res.status).toBe(422);
   });
 
-  it('422 — cgu_accepted = false is rejected', async () => {
+  it('400 — cgu_accepted = false is rejected', async () => {
+    // Controller-level business rule guard (runs after Joi) — returns 400, not 422
     const res = await request(app)
       .post('/api/v1/auth/register')
       .send({ ...VALID_USER, cgu_accepted: false });
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
   });
 });
 
